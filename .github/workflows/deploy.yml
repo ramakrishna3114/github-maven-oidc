@@ -1,1 +1,75 @@
+name: Full Stack Deployment using OIDC + SSM
 
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      ################################################
+      # Configure AWS using OIDC
+      ################################################
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::542622959484:role/cicd-rama
+          aws-region: ap-south-1
+
+      ################################################
+      # Deploy through SSM
+      ################################################
+
+      - name: Deploy Application
+        run: |
+
+          aws ssm send-command \
+          --instance-ids i-0414a66008461dbc5 \
+          --document-name "AWS-RunShellScript" \
+          --comment "Deploy Full Stack Application" \
+          --parameters 'commands=[
+
+          "cd /home/ec2-user",
+
+          "if [ ! -d Java-springboot-project ]; then git clone https://github.com/CloudTechDevOps/Java-springboot-project.git;fi",
+
+          "cd Java-springboot-project",
+
+          "git pull origin main",
+
+          "echo ---------- FRONTEND ----------",
+
+          "cd frontend",
+
+          "python3 --version",
+
+          "pip3 --version",
+
+          "python3 -m pip install --upgrade pip",
+
+          "pip3 install -r requirements.txt",
+
+          "python3 -m streamlit --version",
+
+          "pkill -f streamlit || true",
+
+          "nohup python3 -m streamlit run app.py --server.address=0.0.0.0 --server.port=8501 > streamlit.log 2>&1 &",
+
+          "echo ---------- BACKEND ----------",
+
+          "cd ../backend",
+
+          "mvn clean package -DskipTests",
+
+          "pkill -f java || true",
+
+          "nohup java -jar target/*.jar > backend.log 2>&1 &"
+
+          ]'
