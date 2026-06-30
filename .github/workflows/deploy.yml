@@ -12,11 +12,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       ################################################
-      # Configure AWS using OIDC
+      # Configure AWS using OIDC (no keys needed)
       ################################################
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -24,52 +22,54 @@ jobs:
           aws-region: us-east-1
 
       ################################################
-      # Deploy through SSM
+      # Deploy via SSM
       ################################################
-
-      - name: Deploy Application
+      - name: Deploy Application via SSM
         run: |
-
           aws ssm send-command \
-          --instance-ids i-0414a66008461dbc5 \
-          --document-name "AWS-RunShellScript" \
-          --comment "Deploy Full Stack Application" \
-          --parameters 'commands=[
+            --instance-ids i-0414a66008461dbc5 \
+            --document-name "AWS-RunShellScript" \
+            --comment "Full Stack Deployment" \
+            --parameters 'commands=[
 
-          "cd /home/ec2-user",
+              "set -e",
 
-          "if [ ! -d Java-springboot-project ]; then git clone https://github.com/CloudTechDevOps/Java-springboot-project.git;fi",
+              "cd /home/ec2-user",
 
-          "cd Java-springboot-project",
+              "echo ---------- SOURCE CODE UPDATE ----------",
 
-          "git pull origin main",
+              "if [ ! -d Java-springboot-project ]; then \
+                  git clone https://github.com/CloudTechDevOps/Java-springboot-project.git; \
+               else \
+                  cd Java-springboot-project && git reset --hard && git pull origin main && cd ..; \
+               fi",
 
-          "echo ---------- FRONTEND ----------",
+              "cd Java-springboot-project",
 
-          "cd frontend",
+              "echo ---------- FRONTEND DEPLOYMENT ----------",
 
-          "python3 --version",
+              "cd frontend",
 
-          "pip3 --version",
+              "if [ ! -d venv ]; then python3 -m venv venv; fi",
 
-          "python3 -m pip install --upgrade pip",
+              "venv/bin/python -m pip install --upgrade pip",
 
-          "pip3 install -r requirements.txt",
+              "venv/bin/pip install -r requirements.txt",
 
-          "python3 -m streamlit --version",
+              "pkill -f streamlit || true",
 
-          "pkill -f streamlit || true",
+              "nohup venv/bin/python -m streamlit run app.py --server.address=0.0.0.0 --server.port=8501 > streamlit.log 2>&1 &",
 
-          "nohup python3 -m streamlit run app.py --server.address=0.0.0.0 --server.port=8501 > streamlit.log 2>&1 &",
+              "echo ---------- BACKEND DEPLOYMENT ----------",
 
-          "echo ---------- BACKEND ----------",
+              "cd ../backend",
 
-          "cd ../backend",
+              "mvn clean package -DskipTests",
 
-          "mvn clean package -DskipTests",
+              "JAR=$(ls target/*.jar | head -n 1)",
 
-          "pkill -f java || true",
+              "pkill -f \"java -jar\" || true",
 
-          "nohup java -jar target/*.jar > backend.log 2>&1 &"
+              "nohup java -jar $JAR > backend.log 2>&1 &"
 
-          ]'
+            ]'
